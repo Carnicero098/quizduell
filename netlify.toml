@@ -1,0 +1,20 @@
+[build]
+  publish = "."
+  functions = "funktionen"
+
+# Fremd geladen wird nur der QR-Code-Baustein im Präsentiermodus (cdnjs).
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; media-src 'self' data: blob:; form-action 'none'; base-uri 'none'; frame-ancestors 'none'"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "geolocation=(), camera=(), microphone=(), interest-cohort=()"
+
+# Sicherheitsnetz: Falls die Funktion ihren Pfad nicht selbst beansprucht,
+# landet /api/... trotzdem bei ihr.
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = false

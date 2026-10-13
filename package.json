@@ -1,0 +1,10 @@
+{
+  "name": "baumpflege-quizduell",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Quizduell fuer Baumpfleger mit Handy-Teilnahme und Praesentiermodus",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.0"
+  }
+}
