@@ -307,20 +307,21 @@ textarea.eingabe { resize: vertical; min-height: 4.5em; line-height: 1.4; }
 .wiese-avatare button { background: none; border: 0; padding: 0; }
 .leer-hinweis { color: var(--ink-2); font-weight: 700; font-size: clamp(1rem, 1.3vw, 1.5rem); align-self: center; justify-self: center; text-align: center; }
 
-.frage-gross { display: grid; grid-template-rows: auto 1fr; gap: 2vh; min-height: 0; }
+.frage-gross { display: grid; position: relative; grid-template-rows: auto 1fr; gap: calc(var(--fit, 1) * 2vh); min-height: 0; height: 100%; overflow: hidden; }
 .frage-gross.mit-antworten { grid-template-rows: auto auto; align-content: start; }
 .fragekarte { padding: 2.2vh 2.4vw; display: grid; grid-template-columns: 1fr; gap: 2vw; align-items: center; min-height: 0; }
 .fragekarte.mit-bild { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
-.fragekarte .text { font-family: var(--schrift-titel); font-weight: 700; font-size: clamp(1.6rem, 3.2vw, 4rem); line-height: 1.15; text-wrap: balance; }
-.mit-antworten .fragekarte .text { font-size: clamp(1.3rem, 2.3vw, 2.8rem); }
-.fragekarte img { max-height: 46vh; border-radius: 16px; border: var(--rand); background: #fff; justify-self: center; object-fit: contain; }
-.mit-antworten .fragekarte img { max-height: 24vh; }
-.frage-nur { display: grid; place-items: center; min-height: 0; }
-.frage-nur .fragekarte { width: min(1400px, 100%); max-height: 100%; padding: 4vh 3vw; animation: aufploppen .5s cubic-bezier(.2, 1.4, .4, 1); }
+.fragekarte .text { font-family: var(--schrift-titel); font-weight: 700; font-size: calc(var(--fit, 1) * clamp(1.6rem, 3.2vw, 4rem)); line-height: 1.15; text-wrap: balance; }
+.mit-antworten .fragekarte .text { font-size: calc(var(--fit, 1) * clamp(1.3rem, 2.3vw, 2.8rem)); }
+.fragekarte .text.klein { font-size: calc(var(--fit, 1) * clamp(1.1rem, 1.8vw, 2.2rem)); }
+.fragekarte img { max-height: calc(var(--fit, 1) * 46vh); border-radius: 16px; border: var(--rand); background: #fff; justify-self: center; object-fit: contain; }
+.mit-antworten .fragekarte img { max-height: calc(var(--fit, 1) * 24vh); }
+.frage-nur { display: grid; position: relative; place-items: safe center; min-height: 0; height: 100%; overflow: hidden; }
+.frage-nur .fragekarte { width: min(1400px, 100%); padding: 4vh 3vw; animation: aufploppen .5s cubic-bezier(.2, 1.4, .4, 1); }
 .antworten-gross { display: grid; grid-template-columns: 1fr 1fr; gap: 1.6vh 1.4vw; }
-.antworten-gross .antwort { font-size: clamp(1.2rem, 2.3vw, 2.8rem); padding: 1.6vh 1.4vw; border-radius: 24px; cursor: default; animation: reinrutschen .45s cubic-bezier(.2, 1.4, .4, 1) both; position: relative; min-height: 13vh; }
+.antworten-gross .antwort { font-size: calc(var(--fit, 1) * clamp(1.2rem, 2.3vw, 2.8rem)); padding: calc(var(--fit, 1) * 1.6vh) 1.4vw; border-radius: 24px; cursor: default; animation: reinrutschen .45s cubic-bezier(.2, 1.4, .4, 1) both; position: relative; min-height: calc(var(--fit, 1) * 13vh); }
 .antworten-gross .antwort:nth-child(2) { animation-delay: .08s; } .antworten-gross .antwort:nth-child(3) { animation-delay: .16s; } .antworten-gross .antwort:nth-child(4) { animation-delay: .24s; }
-.antworten-gross .antwort .marke { width: clamp(44px, 4vw, 72px); height: clamp(44px, 4vw, 72px); }
+.antworten-gross .antwort .marke { width: calc(var(--fit, 1) * clamp(44px, 4vw, 72px)); height: calc(var(--fit, 1) * clamp(44px, 4vw, 72px)); }
 .antworten-gross .antwort .marke svg { width: 64%; height: 64%; }
 .antworten-gross .antwort.falsch { opacity: .35; filter: grayscale(.7); }
 .antworten-gross .antwort.richtig { animation: richtigPuls 1s ease-in-out 2; outline: 6px solid #fff; box-shadow: 0 0 0 10px var(--laub), var(--schatten); }
@@ -338,13 +339,13 @@ textarea.eingabe { resize: vertical; min-height: 4.5em; line-height: 1.4; }
 .uhr.knapp .zahl { color: var(--beere); animation: tick 1s infinite; }
 @keyframes tick { 10% { transform: scale(1.2); } 30% { transform: scale(1); } }
 
-.aufloesung { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 24vw); gap: 1.6vw; min-height: 0; }
-.aufloesung-links { display: grid; grid-template-rows: auto auto 1fr; gap: 1.6vh; min-height: 0; }
-.erklaerung { padding: 1.6vh 1.8vw; align-self: start; display: grid; grid-template-columns: 1fr; gap: 1.4vw; align-items: center; min-height: 0; overflow: hidden; animation: aufploppen .5s .3s both cubic-bezier(.2, 1.4, .4, 1); }
+.aufloesung { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 24vw); gap: 1.6vw; min-height: 0; height: 100%; }
+.aufloesung-links { display: grid; position: relative; grid-template-rows: auto auto auto; align-content: start; gap: calc(var(--fit, 1) * 1.6vh); min-height: 0; overflow: hidden; }
+.erklaerung { padding: 1.6vh 1.8vw; align-self: start; display: grid; grid-template-columns: 1fr; gap: 1.4vw; align-items: center; min-height: 0; animation: aufploppen .5s .3s both cubic-bezier(.2, 1.4, .4, 1); }
 .erklaerung.mit-bild { grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); }
-.erklaerung h3 { font-size: clamp(1rem, 1.4vw, 1.6rem); color: var(--laub-dunkel); }
-.erklaerung p { margin: .3em 0 0; font-size: clamp(1rem, 1.6vw, 1.9rem); line-height: 1.35; font-weight: 600; }
-.erklaerung img { max-height: 26vh; border-radius: 14px; border: var(--rand); justify-self: center; }
+.erklaerung h3 { font-size: calc(var(--fit, 1) * clamp(1rem, 1.4vw, 1.6rem)); color: var(--laub-dunkel); }
+.erklaerung p { margin: .3em 0 0; font-size: calc(var(--fit, 1) * clamp(1rem, 1.6vw, 1.9rem)); line-height: 1.35; font-weight: 600; }
+.erklaerung img { max-height: calc(var(--fit, 1) * 26vh); border-radius: 14px; border: var(--rand); justify-self: center; }
 .bestenliste { padding: 1.6vh 1.2vw; display: grid; align-content: start; gap: 1.2vh; min-height: 0; overflow: hidden; }
 .bestenliste h3 { font-size: clamp(1.1rem, 1.5vw, 1.8rem); text-align: center; }
 .bestenliste .eintrag { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: .6vw; }

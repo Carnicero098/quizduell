@@ -773,10 +773,12 @@
       if (neuePhase) {
         Ton.rauschen();
         mitte.innerHTML = `<div class="frage-nur"><div class="karte fragekarte${bild ? " mit-bild" : ""}"><div class="text">${esc(f.text)}</div>${bild}</div></div>`;
+        einpassenSpaeter();
         fuss.innerHTML = `<div class="reihe" id="reihe"></div><div class="aktion">${weiterKnopf("Antworten zeigen ▶", "")}</div>`;
         $("#weiter").onclick = () => { Ton.klick(); praesAktion({ aktion: "weiter", von: "frage", nr: z.nr }); };
       }
       aktualisiereReihe(spieler, "frage");
+      einpassen();
       return;
     }
 
@@ -809,8 +811,10 @@
             ${weiterKnopf("Auflösen ▶", "orange")}
           </div>`;
         $("#weiter").onclick = () => { Ton.klick(); praesAktion({ aktion: "weiter", von: "antworten", nr: z.nr }); };
+        einpassenSpaeter();
       }
       aktualisiereReihe(spieler, "antworten");
+      einpassen();
       praesKnopfStatus();
       return;
     }
@@ -822,7 +826,7 @@
         const top = (z.rangliste || []).slice(0, 3).filter((r) => r.punkte > 0);
         mitte.innerHTML = `<div class="aufloesung">
           <div class="aufloesung-links">
-            <div class="karte fragekarte" style="padding:1.4vh 2vw"><div class="text" style="font-size:clamp(1.1rem,1.8vw,2.2rem)">${esc(f.text)}</div></div>
+            <div class="karte fragekarte" style="padding:1.4vh 2vw"><div class="text klein">${esc(f.text)}</div></div>
             <div class="antworten-gross">${antwortKacheln(true)}</div>
             ${f.erkl || ebild ? `<div class="karte erklaerung${ebild ? " mit-bild" : ""}"><div><h3>Erklärung</h3>${f.erkl ? `<p>${esc(f.erkl)}</p>` : ""}</div>${ebild}</div>` : "<div></div>"}
           </div>
@@ -832,8 +836,10 @@
         const letzte = z.nr + 1 >= z.anzahl;
         fuss.innerHTML = `<div class="reihe" id="reihe"></div><div class="aktion">${weiterKnopf(letzte ? "Zur Siegerehrung 🏆" : "Nächste Frage ▶")}</div>`;
         $("#weiter").onclick = () => { Ton.klick(); praesAktion({ aktion: "weiter", von: "aufloesung", nr: z.nr }); };
+        einpassenSpaeter();
       }
       aktualisiereReihe(spieler, "aufloesung");
+      einpassen();
       return;
     }
 
@@ -868,6 +874,44 @@
       aktualisiereReihe(spieler, "finale");
     }
   }
+
+  // Lange Texte passen sich dem Bildschirm an: Alle Schrift- und Bildgrößen der
+  // Bühne hängen am Faktor --fit (siehe app.css). Er wird so weit verkleinert,
+  // bis nichts mehr über den Rand hinausragt. Kurze Fragen bleiben groß.
+  const EINPASS_BOX = ".frage-nur, .frage-gross, .aufloesung-links";
+  function einpassen() {
+    const box = $("#mitte")?.querySelector(EINPASS_BOX);
+    if (!box) return;
+    // Gemessen wird über offsetTop/offsetHeight: Die Einblend-Animationen (scale,
+    // translate) verfälschen diese Werte nicht – scrollHeight dagegen schon.
+    const teile = [...box.children];
+    const karten = $$(".karte", box);
+    const passt = () => teile.every((t) => t.offsetTop + t.offsetHeight <= box.clientHeight + 1) &&
+      karten.every((k) => k.scrollHeight <= k.clientHeight + 1);
+    box.style.setProperty("--fit", "1");
+    if (passt()) return;
+    let lo = 0.3, hi = 1;
+    for (let i = 0; i < 8; i++) {
+      const mid = (lo + hi) / 2;
+      box.style.setProperty("--fit", mid.toFixed(3));
+      if (passt()) lo = mid; else hi = mid;
+    }
+    box.style.setProperty("--fit", lo.toFixed(3));
+  }
+  function einpassenSpaeter() {
+    // Erst messen, wenn Kopf- und Fußzeile stehen; Bilder erneut, sobald geladen
+    requestAnimationFrame(() => requestAnimationFrame(einpassen));
+    // Nachmessen, falls Bilder, Schriften oder die Avatarreihe noch nachrücken
+    setTimeout(einpassen, 900);
+    setTimeout(einpassen, 2400);
+    $$("#mitte img").forEach((img) => { if (!img.complete) img.addEventListener("load", einpassen, { once: true }); });
+  }
+  let einpassTimer = null;
+  window.addEventListener("resize", () => {
+    if (document.body.dataset.modus !== "praes") return;
+    clearTimeout(einpassTimer);
+    einpassTimer = setTimeout(einpassen, 150);
+  });
 
   function aktualisiereReihe(spieler, art) {
     const reihe = $("#reihe");
