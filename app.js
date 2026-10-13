@@ -14,7 +14,6 @@
   const { esc } = Avatare;
   const LOKAL = ["localhost", "127.0.0.1", ""].includes(location.hostname) || location.protocol === "file:";
   const LOKAL_PW = "12345";
-  const ZEIT_MS = 10000;
   const BUCHSTABEN = ["A", "B", "C", "D"];
 
   const $ = (s, el = document) => el.querySelector(s);
@@ -432,8 +431,7 @@
 
   function teilnehmerZeichnen() {
     const z = T.z, ich = z.ich || {};
-    const gesperrt = z.phase === "antworten" && jetzt() > z.deadline;
-    const key = [z.phase, z.gid, z.nr, gesperrt, aktuelleWahl(), ich.platz, ich.punkte, !!ich.entfernt].join("|");
+    const key = [z.phase, z.gid, z.nr, aktuelleWahl(), ich.platz, ich.punkte, !!ich.entfernt].join("|");
     if (key === T.key) return;
     T.key = key;
     takt = null;
@@ -482,34 +480,20 @@
     if (z.phase === "antworten") {
       const wahl = aktuelleWahl();
       if (T.gespielt["a" + z.gid + z.nr] !== true) { T.gespielt["a" + z.gid + z.nr] = true; Ton.auftritt(); }
+      // Kein Zeitlimit: Die Antwort lässt sich ändern, bis aufgelöst wird
       const knoepfe = (z.frage?.antworten || []).map((t, i) => t && t.trim()
-        ? `<button class="antwort a${i + 1}${wahl && wahl.includes(i) ? " gewaehlt" : ""}" data-wahl="${i}" ${gesperrt ? 'aria-disabled="true"' : ""} aria-pressed="${!!(wahl && wahl.includes(i))}">
+        ? `<button class="antwort a${i + 1}${wahl && wahl.includes(i) ? " gewaehlt" : ""}" data-wahl="${i}" aria-pressed="${!!(wahl && wahl.includes(i))}">
             <span class="marke">${MARKE[i]}<b>${BUCHSTABEN[i]}</b></span><span>${esc(t)}</span></button>` : "").join("");
       const mehrfach = !!z.frage?.mehrfach;
       let hinweis;
-      if (gesperrt) hinweis = wahl != null ? "Zeit um — deine Antwort ist eingeloggt 🔒" : "Zeit um — leider keine Antwort";
-      else if (mehrfach) hinweis = wahl != null ? `${wahl.length} gewählt — tippe nochmal, um eine Antwort abzuwählen.` : "Tippe alle richtigen Antworten an";
-      else hinweis = wahl != null ? "Gewählt! Bis zum Ablauf kannst du noch wechseln." : "Tippe auf deine Antwort";
+      if (mehrfach) hinweis = wahl != null ? `${wahl.length} gewählt — tippe nochmal, um eine Antwort abzuwählen.` : "Tippe alle richtigen Antworten an";
+      else hinweis = wahl != null ? "Gewählt! Bis zur Auflösung kannst du noch wechseln." : "Tippe auf deine Antwort";
       app.innerHTML = `<div class="handy">${kopf}
         <div class="karte frage-handy">${nr}<div class="text" style="font-size:1.1rem">${esc(z.frage?.text)}</div>
           ${mehrfach ? '<span class="pille gelb mehrfach">Mehrere Antworten richtig</span>' : ""}</div>
-        <div><div class="zeitbalken" id="balken"><i></i></div><div class="zeit-zahl" id="zeitzahl"></div></div>
-        <div class="antworten-handy${wahl != null ? " gewaehlt" : ""}${gesperrt ? " gesperrt" : ""}">${knoepfe}</div>
+        <div class="antworten-handy${wahl != null ? " gewaehlt" : ""}">${knoepfe}</div>
         <div class="hinweis">${hinweis}</div></div>`;
       $$("[data-wahl]").forEach((b) => (b.onclick = () => waehle(+b.dataset.wahl)));
-      if (!gesperrt) {
-        const balken = $("#balken"), streifen = $("#balken i"), zahl = $("#zeitzahl");
-        takt = () => {
-          const rest = Math.max(0, z.deadline - jetzt());
-          streifen.style.transform = `scaleX(${rest / ZEIT_MS})`;
-          balken.classList.toggle("knapp", rest < 3500);
-          zahl.textContent = rest > 0 ? `noch ${Math.ceil(rest / 1000)} s` : "Zeit um!";
-          if (rest <= 0) { takt = null; teilnehmerZeichnen(); }
-        };
-      } else {
-        $("#balken i").style.transform = "scaleX(0)";
-        $("#zeitzahl").textContent = "Zeit um!";
-      }
       return;
     }
 
@@ -564,7 +548,7 @@
 
   async function waehle(i) {
     const z = T.z;
-    if (z.phase !== "antworten" || jetzt() > z.deadline) return;
+    if (z.phase !== "antworten") return;
     const k = z.gid + "/" + z.nr;
     const vorher = aktuelleWahl() || [];
     let neu;
@@ -586,7 +570,7 @@
       } catch (err) {
         // Zurück auf den Stand des Servers
         T.auswahl[k] = undefined;
-        toast(err.code === "zeit_um" ? "Zu spät — die Zeit war schon um" : "Antwort nicht angekommen — tippe nochmal");
+        toast(err.code === "keine_frage" ? "Zu spät — die Frage ist schon aufgelöst" : "Antwort nicht angekommen — tippe nochmal");
         T.key = "";
         teilnehmerZeichnen();
       }
@@ -819,27 +803,12 @@
         fuss.innerHTML = `<div class="reihe" id="reihe"></div>
           <div class="aktion" style="grid-template-columns:auto auto;align-items:center;gap:18px">
             <div style="display:grid;justify-items:center;gap:6px">
-              <div class="uhr" id="uhr"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="#fff" stroke="#2b1d14" stroke-width="5"/><circle id="uhr-ring" cx="50" cy="50" r="38" fill="none" stroke="#2f9e44" stroke-width="12" stroke-dasharray="238.8" stroke-dashoffset="0" stroke-linecap="round"/></svg><div class="zahl" id="uhr-zahl">10</div></div>
+              <div class="uhr" id="uhr" title="So viele haben schon geantwortet"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" fill="#fff" stroke="#2b1d14" stroke-width="5"/><circle id="uhr-ring" cx="50" cy="50" r="38" fill="none" stroke="#2f9e44" stroke-width="12" stroke-dasharray="238.8" stroke-dashoffset="238.8" stroke-linecap="round" style="transition:stroke-dashoffset .4s"/></svg><div class="zahl" id="uhr-zahl">0</div></div>
               <span class="zaehler" id="zaehler"></span>
             </div>
-            ${weiterKnopf("Auflösen ▶", "orange", false)}
+            ${weiterKnopf("Auflösen ▶", "orange")}
           </div>`;
         $("#weiter").onclick = () => { Ton.klick(); praesAktion({ aktion: "weiter", von: "antworten", nr: z.nr }); };
-        const ring = $("#uhr-ring"), zahl = $("#uhr-zahl"), uhr = $("#uhr");
-        takt = () => {
-          const rest = Math.max(0, z.deadline - jetzt());
-          const sek = Math.ceil(rest / 1000);
-          ring.setAttribute("stroke-dashoffset", (238.8 * (1 - rest / ZEIT_MS)).toFixed(1));
-          ring.setAttribute("stroke", rest < 3500 ? "#ef476f" : "#2f9e44");
-          uhr.classList.toggle("knapp", rest > 0 && rest < 3500);
-          if (sek !== P.sek) {
-            if (P.sek != null && sek <= 3 && sek > 0) Ton.tick(sek === 1);
-            if (P.sek != null && P.sek > 0 && sek === 0) { Ton.zeitUm(); praesKnopfStatus(); }
-            P.sek = sek;
-            zahl.textContent = sek;
-          }
-          if (rest <= 0) takt = null;
-        };
       }
       aktualisiereReihe(spieler, "antworten");
       praesKnopfStatus();
@@ -913,12 +882,20 @@
     const z = P.d?.zustand;
     const b = $("#weiter");
     if (!z || z.phase !== "antworten" || !b) return;
+    // Kein Zeitlimit: Der Ring zeigt, wie viele schon geantwortet haben,
+    // aufgelöst wird jederzeit per Klick
     const sp = P.d.spieler;
     const fertig = sp.filter((p) => p.hat != null).length;
-    const zeitUm = jetzt() >= z.deadline;
+    const alle = sp.length > 0 && fertig === sp.length;
     const z_ = $("#zaehler");
-    if (z_) z_.textContent = `${fertig} von ${sp.length} geantwortet`;
-    b.disabled = P.sendet || !(zeitUm || (sp.length > 0 && fertig === sp.length));
+    if (z_) z_.textContent = alle ? "Alle haben geantwortet!" : `${fertig} von ${sp.length} geantwortet`;
+    const ring = $("#uhr-ring"), zahl = $("#uhr-zahl");
+    if (ring) ring.setAttribute("stroke-dashoffset", (238.8 * (1 - (sp.length ? fertig / sp.length : 0))).toFixed(1));
+    if (zahl) zahl.textContent = fertig;
+    const key = z.gid + "/" + z.nr;
+    if (alle && P.alleGemeldet !== key) { P.alleGemeldet = key; Ton.zeitUm(); }
+    b.classList.toggle("bereit", alle);
+    b.disabled = P.sendet;
   }
 
   let qrBibliothek = null;

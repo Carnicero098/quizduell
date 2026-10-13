@@ -16,8 +16,6 @@
 // Auf die Auflistung des Speichers wird bewusst verzichtet (im Betriebsbuch
 // lieferte sie im Betrieb nichts) — Mitspieler belegen lückenlose Plätze 0, 1, 2 …
 
-export const ZEIT_MS = 10000;   // Antwortzeit
-const KULANZ_MS = 700;          // Laufzeit der Nachricht vom Handy zum Server
 const MAX_SPIELER = 150;
 const MAX_FRAGEN = 200;
 const MAX_BILD = 4 * 1024 * 1024;
@@ -184,7 +182,6 @@ async function antworten(s, body, jetzt) {
   const z = await s.get("zustand");
   if (!z || z.phase !== "antworten") return fehler("keine_frage", 409);
   if (body?.gid !== z.gid || body?.nr !== z.nr) return fehler("falsche_frage", 409);
-  if (jetzt > z.deadline + KULANZ_MS) return fehler("zeit_um", 409);
   if ((z.entfernt || []).includes(body.slot)) return fehler("entfernt", 403);
   // Bei Fragen mit mehreren richtigen Antworten darf mehr als eine gewählt werden
   const wahl = liste(body?.wahl);
@@ -202,7 +199,7 @@ async function antworten(s, body, jetzt) {
     // Alles wieder abgewählt — dann gilt die Frage als unbeantwortet
     if (vorher) { delete d.antworten[z.nr]; await s.set(key, d); }
   } else if (!vorher || !gleicheListe(vorher, wahl)) {
-    d.antworten[z.nr] = { c: wahl, t: Math.min(jetzt, z.deadline) };
+    d.antworten[z.nr] = { c: wahl, t: jetzt };
     await s.set(key, d);
   }
   return ok({ wahl });
@@ -227,7 +224,7 @@ async function hostSicht(s, jetzt) {
   return ok({ jetzt, zustand: z, spieler });
 }
 
-// Punkte: richtig = 500, dazu bis zu 500 fürs Tempo. Bei mehreren richtigen
+// Punkte: richtig = 500, dazu bis zu 500 fürs Tempo (gemessen bis zur Auflösung). Bei mehreren richtigen
 // Antworten gibt es nur Punkte, wenn genau diese gewählt wurden.
 function wertung(z, spieler) {
   const punkte = { ...(z.punkte || {}) };
@@ -243,7 +240,9 @@ function wertung(z, spieler) {
     if (wahl.length) {
       for (const i of wahl) verteilung[i] += 1;
       if (gleicheListe(wahl, richtig)) {
-        const rest = Math.max(0, Math.min(1, 1 - (a.t - z.start) / ZEIT_MS));
+        // Tempo im Verhältnis zur Zeit, bis aufgelöst wurde
+        const fenster = Math.max(1000, z.deadline - z.start);
+        const rest = Math.max(0, Math.min(1, 1 - (a.t - z.start) / fenster));
         pkt = 500 + Math.round(500 * rest);
       }
     }
@@ -315,11 +314,10 @@ async function hostAktion(s, body, jetzt) {
     z.phase = "frage"; z.nr = 0; z.frage = await ladeFrage(0);
     z.start = null; z.deadline = null;
   } else if (z.phase === "frage") {
-    z.phase = "antworten"; z.start = jetzt; z.deadline = jetzt + ZEIT_MS;
+    z.phase = "antworten"; z.start = jetzt; z.deadline = null;  // kein Zeitlimit — offen bis zur Auflösung
   } else if (z.phase === "antworten") {
-    // Haben alle geantwortet, darf früher aufgelöst werden. Die Wertung
-    // wartet trotzdem die Kulanz ab, falls eine Antwort noch unterwegs ist.
-    if (jetzt < z.deadline) z.deadline = jetzt;
+    // Mit dem Auflösen ist die Frage geschlossen; deadline merkt sich den Zeitpunkt
+    z.deadline = jetzt;
     const spieler = await alleSpieler(s, z.gid);
     Object.assign(z, wertung(z, spieler));
     z.phase = "aufloesung";

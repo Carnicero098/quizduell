@@ -32,15 +32,17 @@ dieses statt `12345`.
 3. Alle scannen den Code, wählen Avatar und Namen. Ihre Avatare hüpfen auf
    die Wiese. Wer einen unpassenden Namen wählt: Avatar antippen → entfernen.
 4. **Quiz starten** → die Frage erscheint (ohne Zeitlimit).
-   **Antworten zeigen** → ab jetzt laufen 10 Sekunden.
-5. Sobald alle geantwortet haben oder die Zeit um ist: **Auflösen** →
+   **Antworten zeigen** → alle tippen ihre Antwort, es gibt kein Zeitlimit.
+   Ein Ring zeigt, wie viele schon geantwortet haben.
+5. Wann du willst (der Knopf wippt, sobald alle geantwortet haben): **Auflösen** →
    richtige Antwort, Erklärung, Punkte, die drei Besten.
 6. Nach der letzten Frage: **Zur Siegerehrung** → Platz 3, 2, 1 mit Trommelwirbel.
 
 Weiterschalten geht auch mit Leertaste, Enter, Pfeil rechts oder einem
 Präsentations-Klicker.
 
-**Punkte:** richtige Antwort 500 Punkte, dazu bis zu 500 Punkte fürs Tempo.
+**Punkte:** richtige Antwort 500 Punkte, dazu bis zu 500 Punkte fürs Tempo
+(gemessen an der Zeit bis zur Auflösung).
 Bei Fragen mit mehreren richtigen Antworten (im Creator mehrere Häkchen) gibt
 es nur Punkte, wenn genau alle richtigen gewählt sind.
 

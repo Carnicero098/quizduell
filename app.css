@@ -437,3 +437,7 @@ body[data-modus="creator"] { background: linear-gradient(#e6f6ff, #f4fbef); }
 
 /* Hinweis bei Fragen mit mehreren richtigen Antworten */
 .mehrfach { justify-self: start; margin-top: .5em; font-size: clamp(.85rem, 1.3vw, 1.4rem); }
+
+/* Alle haben geantwortet: der Auflösen-Knopf wippt */
+.knopf.bereit { animation: bereit 1s ease-in-out infinite; }
+@keyframes bereit { 50% { transform: translateY(-4px) scale(1.05); } }
