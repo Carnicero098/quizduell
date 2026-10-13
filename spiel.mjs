@@ -36,13 +36,22 @@ const zufall = (n = 10) => {
 
 const text = (v, max) => String(v ?? "").replace(/\s+$/g, "").slice(0, max);
 
+// Eine Wahl oder die richtigen Antworten als sortierte Liste: 2 → [2], [3, 1, 3] → [1, 3].
+// Ältere Daten mit einer einzelnen Zahl werden so ebenfalls verstanden.
+export function liste(v) {
+  const roh = Array.isArray(v) ? v : v == null ? [] : [v];
+  return [...new Set(roh.filter((x) => [0, 1, 2, 3].includes(x)))].sort();
+}
+const gleicheListe = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+
 // Eine Frage gilt als spielbar, wenn sie Text, mindestens zwei Antworten und
-// eine als richtig markierte, ausgefüllte Antwort hat.
+// mindestens eine richtige Antwort hat — und jede richtige ist ausgefüllt.
 export function spielbar(f) {
   if (!f || !String(f.text || "").trim()) return false;
   const a = (f.antworten || []).map((x) => String(x || "").trim());
   if (a.filter(Boolean).length < 2) return false;
-  return Number.isInteger(f.richtig) && !!a[f.richtig];
+  const r = liste(f.richtig);
+  return r.length > 0 && r.every((i) => !!a[i]);
 }
 
 function sauberesQuiz(q) {
@@ -54,7 +63,7 @@ function sauberesQuiz(q) {
       text: text(f?.text, 400),
       bild: f?.bild ? text(f.bild, 30) : null,
       antworten: [0, 1, 2, 3].map((i) => text(f?.antworten?.[i], 140)),
-      richtig: [0, 1, 2, 3].includes(f?.richtig) ? f.richtig : 0,
+      richtig: liste(f?.richtig).length ? liste(f?.richtig) : [0],
       erkl: text(f?.erkl, 800),
       erklBild: f?.erklBild ? text(f.erklBild, 30) : null
     })),
@@ -113,9 +122,12 @@ function frageFuer(z) {
   const f = z.frage;
   if (!f) return null;
   const sicht = { text: f.text, bild: f.bild };
-  if (z.phase === "antworten" || z.phase === "aufloesung") sicht.antworten = f.antworten;
+  if (z.phase === "antworten" || z.phase === "aufloesung") {
+    sicht.antworten = f.antworten;
+    sicht.mehrfach = liste(f.richtig).length > 1;
+  }
   if (z.phase === "aufloesung") {
-    sicht.richtig = f.richtig;
+    sicht.richtig = liste(f.richtig);
     sicht.erkl = f.erkl;
     sicht.erklBild = f.erklBild;
   }
@@ -153,7 +165,7 @@ async function zustandFuerSpieler(s, q, jetzt) {
         antwort.ich = {
           name: d.name,
           avatar: d.avatar,
-          wahl: a ? a.c : null,
+          wahl: a ? liste(a.c) : null,
           punkte: z.punkte?.[slot] || 0,
           platz: platzVon(z.rangliste, slot),
           von: (z.rangliste || []).length,
@@ -174,8 +186,10 @@ async function antworten(s, body, jetzt) {
   if (body?.gid !== z.gid || body?.nr !== z.nr) return fehler("falsche_frage", 409);
   if (jetzt > z.deadline + KULANZ_MS) return fehler("zeit_um", 409);
   if ((z.entfernt || []).includes(body.slot)) return fehler("entfernt", 403);
-  const wahl = body?.wahl;
-  if (![0, 1, 2, 3].includes(wahl) || !String(z.frage?.antworten?.[wahl] || "").trim()) {
+  // Bei Fragen mit mehreren richtigen Antworten darf mehr als eine gewählt werden
+  const wahl = liste(body?.wahl);
+  const mehrfach = liste(z.frage?.richtig).length > 1;
+  if ((!mehrfach && wahl.length > 1) || wahl.some((i) => !String(z.frage?.antworten?.[i] || "").trim())) {
     return fehler("wahl_ungueltig");
   }
   const key = spielerSchluessel(z.gid, body.slot);
@@ -183,7 +197,11 @@ async function antworten(s, body, jetzt) {
   if (!d || d.token !== body.token) return fehler("unbekannt", 403);
   d.antworten = d.antworten || {};
   // Bei unveränderter Wahl bleibt die frühere Zeit stehen (zählt für Tempo-Punkte)
-  if (!d.antworten[z.nr] || d.antworten[z.nr].c !== wahl) {
+  const vorher = d.antworten[z.nr] ? liste(d.antworten[z.nr].c) : null;
+  if (!wahl.length) {
+    // Alles wieder abgewählt — dann gilt die Frage als unbeantwortet
+    if (vorher) { delete d.antworten[z.nr]; await s.set(key, d); }
+  } else if (!vorher || !gleicheListe(vorher, wahl)) {
     d.antworten[z.nr] = { c: wahl, t: Math.min(jetzt, z.deadline) };
     await s.set(key, d);
   }
@@ -203,31 +221,34 @@ async function hostSicht(s, jetzt) {
         slot: p.slot,
         name: p.name,
         avatar: p.avatar,
-        hat: p.antworten?.[z.nr] ? p.antworten[z.nr].c : null
+        hat: p.antworten?.[z.nr] ? liste(p.antworten[z.nr].c) : null
       }));
   }
   return ok({ jetzt, zustand: z, spieler });
 }
 
-// Punkte: richtig = 500, dazu bis zu 500 fürs Tempo.
+// Punkte: richtig = 500, dazu bis zu 500 fürs Tempo. Bei mehreren richtigen
+// Antworten gibt es nur Punkte, wenn genau diese gewählt wurden.
 function wertung(z, spieler) {
   const punkte = { ...(z.punkte || {}) };
   const zuletzt = {};
   const verteilung = [0, 0, 0, 0];
   const weg = new Set(z.entfernt || []);
+  const richtig = liste(z.frage.richtig);
   for (const p of spieler) {
     if (weg.has(p.slot)) continue;
     const a = p.antworten?.[z.nr];
+    const wahl = a ? liste(a.c) : [];
     let pkt = 0;
-    if (a) {
-      verteilung[a.c] = (verteilung[a.c] || 0) + 1;
-      if (a.c === z.frage.richtig) {
+    if (wahl.length) {
+      for (const i of wahl) verteilung[i] += 1;
+      if (gleicheListe(wahl, richtig)) {
         const rest = Math.max(0, Math.min(1, 1 - (a.t - z.start) / ZEIT_MS));
         pkt = 500 + Math.round(500 * rest);
       }
     }
     punkte[p.slot] = (punkte[p.slot] || 0) + pkt;
-    zuletzt[p.slot] = { c: a ? a.c : null, p: pkt };
+    zuletzt[p.slot] = { c: wahl.length ? wahl : null, p: pkt };
   }
   const rangliste = spieler
     .filter((p) => !weg.has(p.slot))

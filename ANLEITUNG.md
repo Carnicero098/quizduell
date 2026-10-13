@@ -41,6 +41,8 @@ Weiterschalten geht auch mit Leertaste, Enter, Pfeil rechts oder einem
 Präsentations-Klicker.
 
 **Punkte:** richtige Antwort 500 Punkte, dazu bis zu 500 Punkte fürs Tempo.
+Bei Fragen mit mehreren richtigen Antworten (im Creator mehrere Häkchen) gibt
+es nur Punkte, wenn genau alle richtigen gewählt sind.
 
 ## Lokal ausprobieren
 

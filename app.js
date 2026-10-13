@@ -21,6 +21,9 @@
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const app = $("#app");
   const fmt = (n) => Number(n || 0).toLocaleString("de-DE");
+  // Wahl bzw. richtige Antworten als sortierte Liste (wie liste() in spiel.mjs);
+  // ältere Fragen mit einer einzelnen Zahl werden so ebenfalls verstanden
+  const liste = (v) => [...new Set((Array.isArray(v) ? v : v == null ? [] : [v]).filter((x) => [0, 1, 2, 3].includes(x)))].sort();
 
   function lade(k) { try { return JSON.parse(localStorage.getItem(k) || "null"); } catch { return null; } }
   function speichere(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch { /* egal */ } }
@@ -423,7 +426,8 @@
   function aktuelleWahl() {
     const z = T.z;
     const lokal = T.auswahl[z.gid + "/" + z.nr];
-    return lokal != null ? lokal : z.ich?.wahl ?? null;
+    const w = liste(lokal != null ? lokal : z.ich?.wahl);
+    return w.length ? w : null;
   }
 
   function teilnehmerZeichnen() {
@@ -479,13 +483,16 @@
       const wahl = aktuelleWahl();
       if (T.gespielt["a" + z.gid + z.nr] !== true) { T.gespielt["a" + z.gid + z.nr] = true; Ton.auftritt(); }
       const knoepfe = (z.frage?.antworten || []).map((t, i) => t && t.trim()
-        ? `<button class="antwort a${i + 1}${wahl === i ? " gewaehlt" : ""}" data-wahl="${i}" ${gesperrt ? 'aria-disabled="true"' : ""}>
+        ? `<button class="antwort a${i + 1}${wahl && wahl.includes(i) ? " gewaehlt" : ""}" data-wahl="${i}" ${gesperrt ? 'aria-disabled="true"' : ""} aria-pressed="${!!(wahl && wahl.includes(i))}">
             <span class="marke">${MARKE[i]}<b>${BUCHSTABEN[i]}</b></span><span>${esc(t)}</span></button>` : "").join("");
+      const mehrfach = !!z.frage?.mehrfach;
       let hinweis;
       if (gesperrt) hinweis = wahl != null ? "Zeit um — deine Antwort ist eingeloggt 🔒" : "Zeit um — leider keine Antwort";
+      else if (mehrfach) hinweis = wahl != null ? `${wahl.length} gewählt — tippe nochmal, um eine Antwort abzuwählen.` : "Tippe alle richtigen Antworten an";
       else hinweis = wahl != null ? "Gewählt! Bis zum Ablauf kannst du noch wechseln." : "Tippe auf deine Antwort";
       app.innerHTML = `<div class="handy">${kopf}
-        <div class="karte frage-handy">${nr}<div class="text" style="font-size:1.1rem">${esc(z.frage?.text)}</div></div>
+        <div class="karte frage-handy">${nr}<div class="text" style="font-size:1.1rem">${esc(z.frage?.text)}</div>
+          ${mehrfach ? '<span class="pille gelb mehrfach">Mehrere Antworten richtig</span>' : ""}</div>
         <div><div class="zeitbalken" id="balken"><i></i></div><div class="zeit-zahl" id="zeitzahl"></div></div>
         <div class="antworten-handy${wahl != null ? " gewaehlt" : ""}${gesperrt ? " gesperrt" : ""}">${knoepfe}</div>
         <div class="hinweis">${hinweis}</div></div>`;
@@ -518,7 +525,10 @@
         if (navigator.vibrate) try { navigator.vibrate(richtig ? [40, 40, 40] : 200); } catch { /* egal */ }
       }
       const f = z.frage || {};
-      const ri = f.richtig;
+      const ri = liste(f.richtig);
+      const loesungText = ri.length > 1
+        ? `Richtig sind ${ri.map((i) => `${BUCHSTABEN[i]}: ${esc(f.antworten?.[i])}`).join(" · ")}`
+        : `Richtig ist ${BUCHSTABEN[ri[0]]}: ${esc(f.antworten?.[ri[0]])}`;
       app.innerHTML = `<div class="handy">${kopf}
         <div class="karte ergebnis-handy">
           ${Avatare.html(ava, { name, stimmung, platz: oben })}
@@ -527,7 +537,7 @@
           <div class="zahlen"><span class="pille">Platz ${ich.platz || "–"} von ${ich.von || "–"}</span><span class="pille gelb">${fmt(ich.punkte)} Punkte</span></div>
         </div>
         <div class="karte loesung">
-          <b>Richtig ist ${BUCHSTABEN[ri]}: ${esc(f.antworten?.[ri])}</b>
+          <b>${loesungText}</b>
           ${f.erkl ? `<p>${esc(f.erkl)}</p>` : ""}
           ${f.erklBild ? `<img src="${esc(bildUrl(f.erklBild))}" alt="">` : ""}
         </div></div>`;
@@ -556,20 +566,31 @@
     const z = T.z;
     if (z.phase !== "antworten" || jetzt() > z.deadline) return;
     const k = z.gid + "/" + z.nr;
-    const vorher = T.auswahl[k];
-    if (vorher === i) return;
-    T.auswahl[k] = i;
+    const vorher = aktuelleWahl() || [];
+    let neu;
+    if (z.frage?.mehrfach) {
+      // Mehrere richtige Antworten: Antippen wählt an oder wieder ab
+      neu = vorher.includes(i) ? vorher.filter((x) => x !== i) : liste([...vorher, i]);
+    } else {
+      if (vorher.length === 1 && vorher[0] === i) return;
+      neu = [i];
+    }
+    T.auswahl[k] = neu;
     Ton.plopp();
     if (navigator.vibrate) try { navigator.vibrate(25); } catch { /* egal */ }
     teilnehmerZeichnen();
-    try {
-      await api("POST", "antwort", { gid: z.gid, slot: T.ich.slot, token: T.ich.token, nr: z.nr, wahl: i });
-    } catch (err) {
-      T.auswahl[k] = vorher;
-      toast(err.code === "zeit_um" ? "Zu spät — die Zeit war schon um" : "Antwort nicht angekommen — tippe nochmal");
-      T.key = "";
-      teilnehmerZeichnen();
-    }
+    // Nacheinander senden, damit bei schnellem Tippen die letzte Wahl gewinnt
+    T.senden = (T.senden || Promise.resolve()).then(async () => {
+      try {
+        await api("POST", "antwort", { gid: z.gid, slot: T.ich.slot, token: T.ich.token, nr: z.nr, wahl: T.auswahl[k] });
+      } catch (err) {
+        // Zurück auf den Stand des Servers
+        T.auswahl[k] = undefined;
+        toast(err.code === "zeit_um" ? "Zu spät — die Zeit war schon um" : "Antwort nicht angekommen — tippe nochmal");
+        T.key = "";
+        teilnehmerZeichnen();
+      }
+    });
   }
 
   /* =========================================================
@@ -775,13 +796,16 @@
       return;
     }
 
+    const richtige = liste(f.richtig);
+    const mehrfachHinweis = richtige.length > 1 ? '<span class="pille gelb mehrfach">Mehrere Antworten richtig</span>' : "";
     const antwortKacheln = (mitWertung) => (f.antworten || []).map((t, i) => {
       if (!t || !t.trim()) return "";
       let extra = "", wer = "";
       if (mitWertung) {
-        extra = i === f.richtig ? " richtig" : " falsch";
-        const leute = spieler.filter((p) => z.zuletzt?.[p.slot]?.c === i);
-        wer = `<span class="wer">${leute.slice(0, 4).map((p) => `<span class="mini" title="${esc(p.name)}">${Avatare.svg(p.avatar, i === f.richtig ? "froh" : "traurig")}</span>`).join("")}<span class="anz">${z.verteilung?.[i] || 0}</span></span>`;
+        extra = richtige.includes(i) ? " richtig" : " falsch";
+        const leute = spieler.filter((p) => liste(z.zuletzt?.[p.slot]?.c).includes(i));
+        // Gesicht nach dem Gesamtergebnis: bei Mehrfachfragen zählt nur die komplett richtige Auswahl
+        wer = `<span class="wer">${leute.slice(0, 4).map((p) => `<span class="mini" title="${esc(p.name)}">${Avatare.svg(p.avatar, z.zuletzt?.[p.slot]?.p > 0 ? "froh" : "traurig")}</span>`).join("")}<span class="anz">${z.verteilung?.[i] || 0}</span></span>`;
       }
       return `<div class="antwort a${i + 1}${extra}"><span class="marke">${MARKE[i]}<b>${BUCHSTABEN[i]}</b></span><span class="text-a">${esc(t)}</span>${wer}</div>`;
     }).join("");
@@ -790,7 +814,7 @@
       if (neuePhase) {
         Ton.auftritt();
         mitte.innerHTML = `<div class="frage-gross mit-antworten">
-          <div class="karte fragekarte${bild ? " mit-bild" : ""}"><div class="text">${esc(f.text)}</div>${bild}</div>
+          <div class="karte fragekarte${bild ? " mit-bild" : ""}"><div><div class="text">${esc(f.text)}</div>${mehrfachHinweis}</div>${bild}</div>
           <div class="antworten-gross">${antwortKacheln(false)}</div></div>`;
         fuss.innerHTML = `<div class="reihe" id="reihe"></div>
           <div class="aktion" style="grid-template-columns:auto auto;align-items:center;gap:18px">
@@ -931,14 +955,17 @@
     if (!f || !String(f.text || "").trim()) return false;
     const a = (f.antworten || []).map((x) => String(x || "").trim());
     if (a.filter(Boolean).length < 2) return false;
-    return Number.isInteger(f.richtig) && !!a[f.richtig];
+    const r = liste(f.richtig);
+    return r.length > 0 && r.every((i) => !!a[i]);
   }
   function maengel(f) {
     const m = [];
     if (!String(f.text || "").trim()) m.push("Fragetext fehlt");
     const a = (f.antworten || []).map((x) => String(x || "").trim());
+    const r = liste(f.richtig);
     if (a.filter(Boolean).length < 2) m.push("mind. 2 Antworten");
-    else if (!a[f.richtig]) m.push("richtige Antwort ist leer");
+    else if (!r.length) m.push("keine richtige Antwort markiert");
+    else if (r.some((i) => !a[i])) m.push("richtige Antwort ist leer");
     return m;
   }
 
@@ -964,7 +991,7 @@
   }
 
   function neueFrage() {
-    return { id: Math.random().toString(36).slice(2, 10), text: "", bild: null, antworten: ["", "", "", ""], richtig: 0, erkl: "", erklBild: null };
+    return { id: Math.random().toString(36).slice(2, 10), text: "", bild: null, antworten: ["", "", "", ""], richtig: [0], erkl: "", erklBild: null };
   }
 
   function creatorZeichnen() {
@@ -1080,7 +1107,7 @@
       ed.innerHTML = `<div class="karte leerer-editor">
         ${Avatare.html(0, { name: "Kletter-Karl", stimmung: "froh" })}
         <h2>Leg die erste Frage an</h2>
-        <p>Jede Frage hat bis zu vier Antworten (A bis D), eine davon ist richtig. Dazu kannst du eine Erklärung schreiben, die nach der Auflösung erscheint. Bilder sind bei der Frage und bei der Erklärung möglich.</p>
+        <p>Jede Frage hat bis zu vier Antworten (A bis D), eine oder mehrere davon sind richtig. Dazu kannst du eine Erklärung schreiben, die nach der Auflösung erscheint. Bilder sind bei der Frage und bei der Erklärung möglich.</p>
         <button class="knopf gruen riesig" id="c-erste">+ Erste Frage</button>
       </div>`;
       $("#c-erste").onclick = () => $("#c-neu").click();
@@ -1102,11 +1129,11 @@
         <div class="feld"><span>Bild zur Frage (optional)</span>${bildFeld("bild", f.bild)}</div>
       </div>
       <div class="antwort-editor">
-        <div class="feld"><span>Antworten</span><p class="hilfetext">Mindestens zwei Antworten ausfüllen und die richtige markieren. Leere Felder werden im Spiel ausgeblendet.</p></div>
+        <div class="feld"><span>Antworten</span><p class="hilfetext">Mindestens zwei Antworten ausfüllen und die richtige markieren. Sind mehrere richtig, alle anhaken – im Spiel steht dann „Mehrere Antworten richtig“. Leere Felder werden im Spiel ausgeblendet.</p></div>
         ${[0, 1, 2, 3].map((i) => `<div class="antwortzeile">
           <span class="marke a${i + 1}">${BUCHSTABEN[i]}</span>
           <input class="eingabe" id="f-a${i}" data-antwort="${i}" maxlength="140" value="${esc(f.antworten[i])}" placeholder="Antwort ${BUCHSTABEN[i]}" aria-label="Antwort ${BUCHSTABEN[i]}">
-          <label class="richtig-wahl"><input type="radio" name="richtig" value="${i}" ${f.richtig === i ? "checked" : ""}> richtig</label>
+          <label class="richtig-wahl"><input type="checkbox" name="richtig" value="${i}" ${liste(f.richtig).includes(i) ? "checked" : ""}> richtig</label>
         </div>`).join("")}
       </div>
       <div class="zwei-spalten">
@@ -1119,7 +1146,7 @@
     $("#f-text").oninput = (e) => { f.text = e.target.value; geaendert(); };
     $("#f-erkl").oninput = (e) => { f.erkl = e.target.value; geaendert(); };
     $$("[data-antwort]", ed).forEach((el) => (el.oninput = () => { f.antworten[+el.dataset.antwort] = el.value; geaendert(); }));
-    $$('input[name="richtig"]', ed).forEach((el) => (el.onchange = () => { f.richtig = +el.value; Ton.plopp(); geaendert(); }));
+    $$('input[name="richtig"]', ed).forEach((el) => (el.onchange = () => { f.richtig = $$('input[name="richtig"]:checked', ed).map((x) => +x.value); Ton.plopp(); geaendert(); }));
 
     $$("[data-w]", ed).forEach((b) => (b.onclick = () => {
       const w = b.dataset.w, fr = C.quiz.fragen, i = C.aktiv;
